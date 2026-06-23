@@ -23,6 +23,35 @@ const AppError = require("./src/utils/AppError");
 const { seedDefaultPlans } = require("./src/utils/subscriptionPlans");
 
 const app = express();
+
+// ─── Cached DB connection (Vercel serverless pattern) ────────────────────────
+let dbPromise = null;
+const connectDB = () => {
+  if (!dbPromise) {
+    dbPromise = mongoose
+      .connect(process.env.MONGO_URL)
+      .then(async () => {
+        console.log("Connected to MongoDB");
+        try {
+          await seedDefaultPlans();
+          console.log("Subscription plans synced");
+        } catch (err) {
+          console.warn("Failed to seed default plans:", err.message);
+        }
+      })
+      .catch((err) => {
+        console.error("MongoDB connection failed:", err.message);
+        dbPromise = null;
+      });
+  }
+  return dbPromise;
+};
+
+// Middleware to wait for DB on all API routes (except health)
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health") return next();
+  connectDB().then(next).catch(next);
+});
 app.set("trust proxy", 1);
 const { ipKeyGenerator } = rateLimit;
 
@@ -110,29 +139,15 @@ app.all("*", (req, res, next) =>
 // ─── Centralized Error Handler ────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ─── Database Connection ──────────────────────────────────────────────────────
-mongoose
-  .connect(process.env.MONGO_URL)
-  .then(async () => {
-    console.log("Connected to Mongo-DB");
-    try {
-      await seedDefaultPlans();
-      console.log("Subscription plans synced");
-    } catch (err) {
-      console.warn("Failed to seed default plans:", err.message);
-    }
-  })
-  .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
-  });
-
 // Export for Vercel serverless
 module.exports = app;
 
 // Start listening only when not on Vercel
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () =>
-    console.log(`Server running on port ${PORT} [${process.env.NODE_ENV}]`),
-  );
+  connectDB().then(() => {
+    app.listen(PORT, () =>
+      console.log(`Server running on port ${PORT} [${process.env.NODE_ENV}]`)
+    );
+  });
 }
