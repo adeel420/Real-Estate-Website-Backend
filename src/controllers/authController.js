@@ -212,7 +212,12 @@ exports.registerAgency = asyncHandler(async (req, res) => {
   const finalSlug = slugExists ? `${slug}-${Date.now()}` : slug;
 
   // Create tenant
-  const selectedPlan = await resolveSignupPlan(plan, "agency");
+  let selectedPlan;
+  try {
+    selectedPlan = await resolveSignupPlan(plan, "agency");
+  } catch {
+    selectedPlan = legacyPlan("agency", "free");
+  }
   const tenantPlan = assignPlanToTenant(selectedPlan);
   const tenant = await Tenant.create({
     name: agencyName,
