@@ -367,6 +367,11 @@ exports.login = asyncHandler(async (req, res) => {
     throw new AppError("Your registration was rejected. Please contact support.", 403);
   }
 
+  // Block agents & agency admins once they've submitted payment proof (pending approval)
+  if ((user.role === "agent" || user.role === "agency_admin") && user.status === "pending_approval") {
+    throw new AppError("Your account is pending approval from the administrator.", 403);
+  }
+
   const isMatch = await user.comparePassword(password);
   if (!isMatch) throw new AppError("Invalid credentials.", 401);
 
