@@ -20,7 +20,6 @@ const subscriptionPlanRoutes = require("./src/routes/subscriptionPlanRoutes");
 const paymentRoutes = require("./src/routes/paymentRoutes");
 const errorHandler = require("./src/middleware/errorHandler");
 const AppError = require("./src/utils/AppError");
-const { seedDefaultPlans } = require("./src/utils/subscriptionPlans");
 
 const app = express();
 
@@ -30,14 +29,8 @@ const connectDB = () => {
   if (!dbPromise) {
     dbPromise = mongoose
       .connect(process.env.MONGO_URL)
-      .then(async () => {
+      .then(() => {
         console.log("Connected to MongoDB");
-        try {
-          await seedDefaultPlans();
-          console.log("Subscription plans synced");
-        } catch (err) {
-          console.warn("Failed to seed default plans:", err.message);
-        }
       })
       .catch((err) => {
         console.error("MongoDB connection failed:", err.message);

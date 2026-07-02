@@ -140,85 +140,6 @@ const planToPayload = (plan) => ({
   active: Boolean(plan.active),
 });
 
-let _seeded = false;
-
-const ensurePlanIndexes = async () => {
-  try {
-    await SubscriptionPlan.createCollection();
-  } catch {
-    // Collection may already exist — ignore
-  }
-
-  try {
-    const indexes = await SubscriptionPlan.collection.indexes();
-    const hasLegacySlugIndex = indexes.some((index) => index.name === "slug_1" && index.unique);
-
-    if (hasLegacySlugIndex) {
-      await SubscriptionPlan.collection.dropIndex("slug_1");
-    }
-
-    await SubscriptionPlan.syncIndexes();
-  } catch (err) {
-    console.warn("Failed to sync subscription plan indexes:", err.message);
-  }
-};
-
-const seedDefaultPlans = async () => {
-  if (_seeded) return;
-  await ensurePlanIndexes();
-
-  const toDoc = (scope, slug, plan) => ({
-    scope,
-    slug,
-    name: plan.name,
-    price: plan.price,
-    billing: plan.billing,
-    limits: {
-      maxAgents: plan.maxAgents,
-      maxListings: plan.maxListings,
-      maxFeaturedListings: plan.maxFeaturedListings || 0,
-      maxInquiries: 0,
-      storageMb: 0,
-    },
-    features: plan.features,
-    flags: legacyPlan(scope, slug).flags,
-    popular: plan.popular,
-    active: plan.active,
-  });
-
-  for (const scope of Object.keys(DEFAULT_PLAN_LIMITS)) {
-    for (const [slug, plan] of Object.entries(DEFAULT_PLAN_LIMITS[scope])) {
-      try {
-        let existing = await SubscriptionPlan.findOne({ scope, slug, deletedAt: { $exists: false } });
-        const doc = toDoc(scope, slug, plan);
-
-        if (!existing) {
-          existing = await SubscriptionPlan.findOne({ scope, slug });
-          if (existing) {
-            existing.deletedAt = undefined;
-            existing.active = true;
-            Object.assign(existing, doc);
-            await existing.save();
-          } else {
-            await SubscriptionPlan.create(doc);
-          }
-          continue;
-        }
-
-        const hasOldAgencyName = /^Agency\s/i.test(existing.name || "");
-        if (hasOldAgencyName) {
-          Object.assign(existing, doc);
-          await existing.save();
-        }
-      } catch (err) {
-        console.warn(`seedDefaultPlans: failed to seed ${scope}/${slug}:`, err.message);
-      }
-    }
-  }
-
-  _seeded = true;
-};
-
 const getPlan = async (slug = "free", scope = "agency") => {
   try {
     const plan = await SubscriptionPlan.findOne({ slug, scope, deletedAt: { $exists: false } }).lean();
@@ -273,5 +194,5 @@ const getPlanList = async (scope) => {
   return result;
 };
 
-module.exports = { DEFAULT_PLAN_LIMITS, legacyPlan, getPlan, findPlan, getPlanList, planToPayload, seedDefaultPlans };
+module.exports = { DEFAULT_PLAN_LIMITS, legacyPlan, getPlan, findPlan, getPlanList, planToPayload };
 
