@@ -4,7 +4,7 @@ const Tenant = require("../models/Tenant");
 const RefreshToken = require("../models/RefreshToken");
 const asyncHandler = require("../utils/asyncHandler");
 const AppError = require("../utils/AppError");
-const { findPlan, legacyPlan } = require("../utils/subscriptionPlans");
+const { findPlan } = require("../utils/subscriptionPlans");
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -39,8 +39,6 @@ const generateOTP = () =>
 const resolveSignupPlan = async (slug = "free", scope = "agent") => {
   const plan = await findPlan(slug, scope);
   if (plan) return plan;
-  const fallback = legacyPlan(scope, slug);
-  if (fallback?.active) return fallback;
   throw new AppError("Selected subscription plan is not available.", 400);
 };
 
@@ -212,12 +210,7 @@ exports.registerAgency = asyncHandler(async (req, res) => {
   const finalSlug = slugExists ? `${slug}-${Date.now()}` : slug;
 
   // Create tenant
-  let selectedPlan;
-  try {
-    selectedPlan = await resolveSignupPlan(plan, "agency");
-  } catch {
-    selectedPlan = legacyPlan("agency", "free");
-  }
+  const selectedPlan = await resolveSignupPlan(plan, "agency");
   const tenantPlan = assignPlanToTenant(selectedPlan);
   const tenant = await Tenant.create({
     name: agencyName,
